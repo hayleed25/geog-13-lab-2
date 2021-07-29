@@ -1,0 +1,125 @@
+---
+title: "Geography 13"
+author: "[Haylee Damron](https://hayleed25.github.io)"
+subtitle: 'Lab 02: COVID-19 Pandemic'
+output:
+  html_document:
+  theme: journal 
+---
+
+```{r}
+library(tidyverse)
+library(knitr)
+library(readxl)
+library(zoo)
+library(ggplot2)
+library(ggthemes)
+library(sf)
+```
+
+
+# Data
+```{r}
+url =  'https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv'
+covid = read_csv(url)
+
+landDate = read.csv("../data/landdata-states.csv")
+PopulationEstimates = read_excel("../data/PopulationEstimates.xls", skip=2)
+```
+
+# Question 1
+```{r}
+state.of.interest = "California"
+
+# County Level
+covid %>%
+  filter(state == state.of.interest, date == max(date)) %>%
+  slice_max(cases, n=5) %>% 
+knitr::kable(caption = "Counties with the Most COVID Cases")
+
+covid %>% 
+  filter(state == state.of.interest) %>% 
+  group_by(county) %>% 
+  mutate(newCases = cases - lag(cases)) %>% 
+  ungroup() %>%
+  filter(date == max(date)) %>% 
+  slice_max(newCases, n=5) %>% 
+knitr::kable(caption = "Top 5 Counties with the Most COVID Cases")
+
+pop = PopulationEstimates %>% 
+  select("Area_Name", population = "POP_ESTIMATE_2019", fips = "FIPStxt")
+
+covidpop = inner_join(covid, pop, by = "fips")
+
+covidpop %>% 
+  filter(state == state.of.interest, date == max(date)) %>% 
+  mutate(perCapita= cases/population) %>% 
+  slice_max(perCapita, n = 5) %>% 
+knitr::kable(caption = "Top 5 Cases Per Capita")
+
+covidpop %>% 
+  filter(state == state.of.interest) %>% 
+  group_by(county, state) %>% 
+  filter(date > (max(date)-14)) %>% 
+  summarise(min_cases = min(cases), max_cases = max(cases), population = mean(population)) %>% 
+  mutate(diff = max_cases-min_cases) %>% 
+  ungroup() %>% 
+  mutate(NewperCap = diff/population) %>% 
+  slice_max(NewperCap, n = 5) %>% 
+knitr::kable(caption = "Top 5 New Cases Per Capita")
+
+```
+
+# Question 2
+```{r}
+states.of.interest <- c("New York", "California", "Louisiana", "Florida")
+
+# State level
+StateLevel <- covid %>% 
+  filter(state %in% states.of.interest) %>% 
+  group_by(state, date) %>% 
+  summarise(cases = sum(cases)) %>% 
+  mutate(newCases = cases - lag(cases),
+         roll7 = rollmean(newCases, 7, fill = NA, align="right")) %>% 
+  ungroup()
+
+ggplot(data = StateLevel, aes(x = date, y = roll7, group = state)) +
+  geom_line(aes(col=state)) +
+  labs( x = "Date", 
+        y = "Daily New Cases", 
+        title = "COVID-19 Cases in Ca, Ny, La, Fl",
+        subtitle = "7 Day Rolling Mean",
+        caption = "Source: New York Times") +
+  facet_grid(~state) +
+  theme_light() +
+  theme(plot.background = element_rect(fill = "white"),
+          panel.background = element_rect(fill = "white"),
+          plot.title = element_text(size = 14, face = 'bold')) +
+  theme(aspect.ratio = 0.75) +
+  theme(axis.text.x = element_text(angle = 90))
+
+stateCovid = inner_join(pop, covid, by = "fips")
+
+stateCovid %>% 
+  filter(state %in% c("California", "Florida", "Louisiana", "New York")) %>% 
+  group_by(state, date) %>% 
+  summarise(cases = sum(cases)) %>% 
+  mutate(NewCases = cases - lag(cases),
+         roll7 = rollmean(NewCases, 7, fill = NA, align="right")) %>% 
+  ungroup()
+
+
+```
+
+# Question 3 (extra credit)
+```{r}
+#counties = USAboundaries::us_counties() %>% 
+ # select("fips" = geoid, name, state_name) %>% 
+  #st_centroid() %>% 
+  #mutate(LON = st_coordinates(.)[,1], 
+   #      LAT = st_coordinates(.)[,2]) %>% 
+#  st_drop_geometry()
+
+
+```
+
